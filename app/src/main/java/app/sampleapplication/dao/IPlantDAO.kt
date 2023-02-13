@@ -1,4 +1,4 @@
-package dao
+package app.sampleapplication.dao
 
 import retrofit2.Call
 import app.sampleapplication.dto.Plant

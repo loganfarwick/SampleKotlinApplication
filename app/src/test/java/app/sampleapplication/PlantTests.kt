@@ -5,8 +5,7 @@ import app.sampleapplication.dto.Plant
 import app.sampleapplication.service.PlantService
 import junit.framework.Assert.*
 import kotlinx.coroutines.test.runTest
-import org.junit.Rule
-import org.junit.Test
+import org.junit.*
 import org.junit.rules.TestRule
 
 class PlantTests {
@@ -43,5 +42,4 @@ class PlantTests {
         }
         assertTrue(containsCercisCanadensis)
     }
-
 }
