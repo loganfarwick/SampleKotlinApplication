@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.sampleapplication.dto.Plant
 import app.sampleapplication.dto.Specimen
+import app.sampleapplication.dto.User
 import app.sampleapplication.service.IPlantService
 import app.sampleapplication.service.PlantService
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,36 +22,39 @@ class MainViewModel(var plantService : IPlantService = PlantService()) : ViewMod
     var plants : MutableLiveData<List<Plant>> = MutableLiveData<List<Plant>>()
     var specimens : MutableLiveData<List<Specimen>> = MutableLiveData<List<Specimen>>()
     var selectedSpecimen by mutableStateOf(Specimen())
+    var user : User? = null
 
     private lateinit var firestore: FirebaseFirestore
 
     init {
         firestore = FirebaseFirestore.getInstance()
         firestore.firestoreSettings = FirebaseFirestoreSettings.Builder().build()
-        listenToSpecimens()
     }
 
-    private fun listenToSpecimens() {
-       firestore.collection("specimens").addSnapshotListener {
-           snapshot, e ->
-           // handle the error if there is one, and then return
-           if (e != null) {
-               Log.w("Listen failed", e)
-                return@addSnapshotListener
-           }
-           // if we reached this point, there was not an error
-           snapshot?.let {
-               val allSpecimens = ArrayList<Specimen>()
-               allSpecimens.add(Specimen(plantName = NEW_SPECIMEN))
-               val documents = snapshot.documents
-               documents.forEach {
-                   val specimen = it.toObject(Specimen::class.java)
-                   specimen?.let {
-                       allSpecimens.add(it)
+     fun listenToSpecimens() {
+       user?.let {
+           user ->
+           firestore.collection("users").document(user.uid).collection("specimens")
+               .addSnapshotListener { snapshot, e ->
+                   // handle the error if there is one, and then return
+                   if (e != null) {
+                       Log.w("Listen failed", e)
+                       return@addSnapshotListener
+                   }
+                   // if we reached this point, there was not an error
+                   snapshot?.let {
+                       val allSpecimens = ArrayList<Specimen>()
+                       allSpecimens.add(Specimen(plantName = NEW_SPECIMEN))
+                       val documents = snapshot.documents
+                       documents.forEach {
+                           val specimen = it.toObject(Specimen::class.java)
+                           specimen?.let {
+                               allSpecimens.add(it)
+                           }
+                       }
+                       specimens.value = allSpecimens
                    }
                }
-               specimens.value = allSpecimens
-           }
        }
     }
 
@@ -63,16 +67,29 @@ class MainViewModel(var plantService : IPlantService = PlantService()) : ViewMod
     }
 
     fun saveSpecimen() {
-        val document = if (selectedSpecimen.specimenID == null || selectedSpecimen.specimenID.isEmpty()) {
-            // create a new specimen
-            firestore.collection("specimens").document()}
-        else {
-            // update an existing specimen.
-            firestore.collection("specimens").document(selectedSpecimen.specimenID)
+        user?.let {
+            user ->
+            val document =
+                if (selectedSpecimen.specimenID == null || selectedSpecimen.specimenID.isEmpty()) {
+                    // create a new specimen
+                    firestore.collection("users").document(user.uid).collection("specimens").document()
+                } else {
+                    // update an existing specimen.
+                    firestore.collection("users").document(user.uid).collection("specimens").document(selectedSpecimen.specimenID)
+                }
+            selectedSpecimen.specimenID = document.id
+            val handle = document.set(selectedSpecimen)
+            handle.addOnSuccessListener { Log.d("Firebase", "Document Saved") }
+            handle.addOnFailureListener { Log.e("Firebase", "Save failed $it") }
         }
-        selectedSpecimen.specimenID = document.id
-        val handle = document.set(selectedSpecimen)
-        handle.addOnSuccessListener { Log.d("Firebase", "Document Saved") }
-        handle.addOnFailureListener { Log.e("Firebase", "Save failed $it")}
+    }
+
+    fun saveUser() {
+        user?.let {
+            user ->
+            val handle = firestore.collection("users").document(user.uid).set(user)
+            handle.addOnSuccessListener { Log.d("Firebase", "Document Saved") }
+            handle.addOnFailureListener { Log.e("Firebase", "Save failed $it") }
+        }
     }
 }
