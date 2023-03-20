@@ -1,8 +1,12 @@
 package app.sampleapplication
 
+import android.content.ContentValues.TAG
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.content.res.Configuration
+import android.icu.text.SimpleDateFormat
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -28,24 +32,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import app.sampleapplication.dto.Plant
 import app.sampleapplication.dto.Specimen
 import app.sampleapplication.dto.User
 import app.sampleapplication.ui.theme.SampleApplicationTheme
+import coil.compose.AsyncImage
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import java.io.File
+import java.util.*
+import kotlin.collections.ArrayList
 
 class MainActivity : ComponentActivity() {
 
 
+    private var uri: Uri? = null
+    private lateinit var currentImagePath: String
     private var firebaseUser: FirebaseUser? = FirebaseAuth.getInstance().currentUser
     private var selectedPlant: Plant? = null
     private val viewModel: MainViewModel by viewModel<MainViewModel>()
     private var inPlantName: String = ""
+    private var strUri by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -254,6 +266,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text(text = "Photo")
             }
+            AsyncImage(model = strUri, contentDescription = "Specimen Image")
         }
     }
 
@@ -290,7 +303,36 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun invokeCamera() {
-        var i = 1 + 1
+        val file = createImageFile()
+        try {
+            uri = FileProvider.getUriForFile(this, "app.sampleapplication.fileprovider", file)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error: ${e.message}")
+            var foo = e.message
+        }
+        getCameraImage.launch(uri)
+    }
+
+    private fun createImageFile() : File {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+        val imageDirectory = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        return File.createTempFile(
+            "Specimen_${timestamp}",
+            "jpg",
+            imageDirectory
+        ).apply {
+           currentImagePath = absolutePath
+        }
+    }
+
+    private val getCameraImage = registerForActivityResult(ActivityResultContracts.TakePicture()) {
+        success ->
+        if (success) {
+            Log.i(TAG, "Image Location: $uri")
+            strUri = uri.toString()
+        } else {
+            Log.e(TAG, "Image not saved. $uri")
+        }
     }
 
     fun hasCameraPermission() = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
