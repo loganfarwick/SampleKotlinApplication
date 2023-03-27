@@ -12,12 +12,16 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
+import androidx.compose.material.MaterialTheme.typography
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
@@ -48,6 +52,11 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.io.File
 import java.util.*
 import kotlin.collections.ArrayList
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.SnackbarDefaults.backgroundColor
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
 
@@ -116,6 +125,7 @@ class MainActivity : ComponentActivity() {
                                 inPlantName = specimen.plantName
                             }
                         viewModel.selectedSpecimen = specimen
+                        viewModel.fetchPhotos()
                         }) {
                             Text(text = specimen.toString())
                         }
@@ -206,14 +216,22 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun SpecimenFacts(plants: List<Plant> = ArrayList<Plant>(), specimens: List<Specimen> = ArrayList<Specimen>(), selectedSpecimen: Specimen = Specimen() ) {
+    fun SpecimenFacts(
+        plants: List<Plant> = ArrayList<Plant>(),
+        specimens: List<Specimen> = ArrayList<Specimen>(),
+        selectedSpecimen: Specimen = Specimen(),
+    ) {
         var inLocation by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.location) }
         var inDescription by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.description) }
         var inDatePlanted by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.datePlanted) }
         val context = LocalContext.current
         Column {
             SpecimenSpinner(specimens = specimens)
-            TextFieldWithDropdownUsage(dataIn = plants, label = stringResource(R.string.plantName), selectedSpecimen = selectedSpecimen)
+            TextFieldWithDropdownUsage(
+                dataIn = plants,
+                label = stringResource(R.string.plantName),
+                selectedSpecimen = selectedSpecimen
+            )
             OutlinedTextField(
                 value = inLocation,
                 onValueChange = { inLocation = it },
@@ -232,43 +250,129 @@ class MainActivity : ComponentActivity() {
                 label = { Text(stringResource(R.string.datePlanted)) },
                 modifier = Modifier.fillMaxWidth()
             )
-            Button(
-                onClick = {
-                    selectedSpecimen.apply {
-                        plantName = inPlantName
-                        plantId = selectedPlant?.let {
-                            it.id
-                        } ?: 0
-                        location = inLocation
-                        description = inDescription
-                        datePlanted = inDatePlanted
+            Row (modifier = Modifier.padding(all = 2.dp)){
+                Button(
+                    onClick = {
+                        selectedSpecimen.apply {
+                            plantName = inPlantName
+                            plantId = selectedPlant?.let {
+                                it.id
+                            } ?: 0
+                            location = inLocation
+                            description = inDescription
+                            datePlanted = inDatePlanted
+                        }
+                        viewModel.saveSpecimen()
+                        Toast.makeText(
+                            context,
+                            "$inPlantName $inLocation $inDescription $inDatePlanted",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
-                    viewModel.saveSpecimen()
-                    Toast.makeText(
-                        context,
-                        "$inPlantName $inLocation $inDescription $inDatePlanted",
-                        Toast.LENGTH_LONG
-                    ).show()
+                ) {
+                    Text(text = "Save")
                 }
-            ) {
-                  Text(text = "Save")
-            }
-            Button(
-                onClick = {
-                    signIn()
+                Button(
+                    onClick = {
+                        signIn()
+                    }
+                ) {
+                    Text(text = "Logon")
                 }
-            ) {
-                Text(text = "Logon")
-            }
-            Button(
-                onClick = {
-                    takePhoto()
+                Button(
+                    onClick = {
+                        takePhoto()
+                    }
+                ) {
+                    Text(text = "Photo")
                 }
-            ) {
-                Text(text = "Photo")
             }
-            AsyncImage(model = strUri, contentDescription = "Specimen Image")
+            Events()
         }
+    }
+
+    @Composable
+    private fun Events () {
+        val photos by viewModel.eventPhotos.observeAsState(initial = emptyList())
+        LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+            items(
+                items = photos,
+                itemContent = {
+                    EventListItem(photo = it)
+                }
+            )
+        }
+    }
+
+    @Composable
+    fun EventListItem(photo: Photo) {
+        var inDescription by remember(photo.id) { mutableStateOf(photo.description) }
+        Card (
+            modifier = Modifier
+                .padding(horizontal = 2.dp, vertical = 2.dp)
+                .fillMaxWidth(),
+            elevation = 8.dp,
+            backgroundColor = Color.White,
+            contentColor = contentColorFor(backgroundColor),
+            shape = RoundedCornerShape(15.dp),
+            border = BorderStroke(1.dp, Color.Gray)
+        )
+        {
+            Row {
+                Column(Modifier.weight(2f)) {
+                    AsyncImage(
+                        model = photo.localUri, contentDescription = "Event Image",
+                        Modifier
+                            .width(64.dp)
+                            .height(64.dp)
+                    )
+                }
+                Column(Modifier.weight(4f)) {
+                    Text(text = photo.id, style = typography.h6)
+                    Text(text = photo.dateTaken.toString(), style = typography.caption)
+                    OutlinedTextField(
+                        value = inDescription,
+                        onValueChange = { inDescription = it },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Button(
+                        onClick = {
+                            photo.description = inDescription
+                            save(photo)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = "Save",
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            delete(photo)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = "Delete",
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+
+                }
+            }
+        }
+    }
+
+    private fun delete(photo: Photo) {
+        viewModel.delete(photo)
+    }
+
+    private fun save(photo: Photo) {
+        viewModel.updatePhotoDatabase(photo)
     }
 
     private fun takePhoto() {
