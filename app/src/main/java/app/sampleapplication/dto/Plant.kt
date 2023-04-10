@@ -1,13 +1,16 @@
 package app.sampleapplication.dto
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import com.google.gson.annotations.SerializedName
 
+@Entity(tableName="plants")
 data class Plant(
     @SerializedName("genus") var genus : String,
     var species: String,
     var common: String,
     var cultivar: String="",
-    var id: Int = 0) {
+    @PrimaryKey var id: Int = 0) {
     override fun toString(): String {
         return common
     }
