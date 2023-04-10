@@ -2,6 +2,7 @@ package app.sampleapplication
 
 import android.Manifest
 import android.content.ContentValues.TAG
+import android.content.Intent
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.content.res.Configuration
 import android.icu.text.SimpleDateFormat
@@ -319,6 +320,13 @@ class MainActivity : ComponentActivity() {
                     }
                 ) {
                     Text(text = "Photo")
+                }
+                Button(
+                    onClick = {
+                        localContext.startActivity(Intent(localContext, SpecimenMapsActivity::class.java))
+                    }
+                ) {
+                    Text(text = "Map")
                 }
             }
             Events()
