@@ -1,5 +1,6 @@
 package app.sampleapplication
 
+import android.Manifest
 import android.content.ContentValues.TAG
 import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.content.res.Configuration
@@ -37,10 +38,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import app.sampleapplication.dto.Photo
-import app.sampleapplication.dto.Plant
-import app.sampleapplication.dto.Specimen
-import app.sampleapplication.dto.User
 import app.sampleapplication.ui.theme.SampleApplicationTheme
 import coil.compose.AsyncImage
 import com.firebase.ui.auth.AuthUI
@@ -57,6 +54,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.SnackbarDefaults.backgroundColor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.graphics.Color
+import app.sampleapplication.dto.*
 
 class MainActivity : ComponentActivity() {
 
@@ -68,28 +66,53 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModel<MainViewModel>()
     private var inPlantName: String = ""
     private var strUri by mutableStateOf("")
+    private val applicationViewModel : ApplicationViewModel by viewModel<ApplicationViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // viewModel.fetchPlants()
+            viewModel.fetchPlants()
             firebaseUser?.let {
                 val user = User(it.uid, "")
                 viewModel.user = user
                 viewModel.listenToSpecimens()
             }
+
             val plants by viewModel.plants.observeAsState(initial = emptyList())
             val specimens by viewModel.specimens.observeAsState(initial = emptyList())
+            val location by applicationViewModel.getLocationLiveData().observeAsState()
             SampleApplicationTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
                     color = MaterialTheme.colors.background,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    SpecimenFacts(plants, specimens, viewModel.selectedSpecimen)
+                    SpecimenFacts(plants, specimens, viewModel.selectedSpecimen, location)
                 }
             }
+            prepLocationUpdates()
         }
+    }
+
+    private fun prepLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PERMISSION_GRANTED) {
+            requestLocationUpdates()
+        } else {
+            requestSinglePermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    private val requestSinglePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        isGranted ->
+        if (isGranted) {
+            requestLocationUpdates()
+        } else {
+            Toast.makeText(this, "GPS Unavailable" , Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun requestLocationUpdates() {
+        applicationViewModel.startLocationUpdates()
     }
 
     @Composable
@@ -217,16 +240,20 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun SpecimenFacts(
+        //name : String,
         plants: List<Plant> = ArrayList<Plant>(),
         specimens: List<Specimen> = ArrayList<Specimen>(),
         selectedSpecimen: Specimen = Specimen(),
+        currentLocation: LocationDetails?,
     ) {
         var inLocation by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.location) }
         var inDescription by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.description) }
         var inDatePlanted by remember(selectedSpecimen.specimenID) { mutableStateOf(selectedSpecimen.datePlanted) }
         val context = LocalContext.current
+        val localContext = LocalContext.current
         Column {
             SpecimenSpinner(specimens = specimens)
+            GPS(currentLocation)
             TextFieldWithDropdownUsage(
                 dataIn = plants,
                 label = stringResource(R.string.plantName),
@@ -250,6 +277,7 @@ class MainActivity : ComponentActivity() {
                 label = { Text(stringResource(R.string.datePlanted)) },
                 modifier = Modifier.fillMaxWidth()
             )
+
             Row (modifier = Modifier.padding(all = 2.dp)){
                 Button(
                     onClick = {
@@ -261,6 +289,11 @@ class MainActivity : ComponentActivity() {
                             location = inLocation
                             description = inDescription
                             datePlanted = inDatePlanted
+                            currentLocation?.let {
+                                currentLocation ->
+                                latitude =  currentLocation.latitude
+                                longitude = currentLocation.longitude
+                            }
                         }
                         viewModel.saveSpecimen()
                         Toast.makeText(
@@ -271,6 +304,7 @@ class MainActivity : ComponentActivity() {
                     }
                 ) {
                     Text(text = "Save")
+
                 }
                 Button(
                     onClick = {
@@ -375,6 +409,14 @@ class MainActivity : ComponentActivity() {
         viewModel.updatePhotoDatabase(photo)
     }
 
+    private @Composable
+    fun GPS(location: LocationDetails?) {
+        location?.let {
+            Text(text = location.latitude)
+            Text(text = location.latitude)
+        }
+    }
+
     private fun takePhoto() {
         if (hasCameraPermission() == PERMISSION_GRANTED && hasExternalStoragePermission() == PERMISSION_GRANTED) {
             // The user has already granted permission for these activities. Toggle the camera!
@@ -401,8 +443,7 @@ class MainActivity : ComponentActivity() {
         }
         if (permissionGranted) {
             invokeCamera()
-        }
-        else {
+        } else {
             Toast.makeText(this, getString(R.string.cameraPermissionDenied), Toast.LENGTH_LONG).show()
         }
     }
@@ -440,6 +481,7 @@ class MainActivity : ComponentActivity() {
         } else {
             Log.e(TAG, "Image not saved. $uri")
         }
+
     }
 
     fun hasCameraPermission() = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
@@ -455,7 +497,7 @@ class MainActivity : ComponentActivity() {
                 color = MaterialTheme.colors.background,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                SpecimenFacts()
+                //SpecimenFacts("Android")
             }
         }
     }
@@ -464,11 +506,13 @@ class MainActivity : ComponentActivity() {
         val providers = arrayListOf(
             AuthUI.IdpConfig.EmailBuilder().build(),
             AuthUI.IdpConfig.GoogleBuilder().build()
+
         )
         val signInIntent = AuthUI.getInstance()
             .createSignInIntentBuilder()
             .setAvailableProviders(providers)
             .build()
+
         signInLauncher.launch(signInIntent)
     }
 
@@ -486,9 +530,12 @@ class MainActivity : ComponentActivity() {
                 val user = User(it.uid, it.displayName)
                 viewModel.user = user
                 viewModel.saveUser()
+                viewModel.listenToSpecimens()
             }
         } else {
             Log.e("MainActivity.kt", "Error logging in " + response?.error?.errorCode)
+
         }
     }
+
 }

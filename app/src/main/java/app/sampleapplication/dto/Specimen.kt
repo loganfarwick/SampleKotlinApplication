@@ -6,7 +6,10 @@ data class Specimen(
     var specimenID: String = "",
     var location: String = "",
     var description: String = "",
-    var datePlanted: String = "") {
+    var datePlanted: String = "",
+    var latitude : String = "",
+    var longitude : String = ""
+) {
 
     override fun toString(): String {
         return "$plantName $description $location"
