@@ -20,11 +20,11 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.launch
 
-class MainViewModel(var plantService : IPlantService = PlantService()) : ViewModel() {
+class MainViewModel(var plantService : IPlantService) : ViewModel() {
 
     val photos: ArrayList<Photo> by mutableStateOf( ArrayList<Photo>())
     internal val NEW_SPECIMEN = "New Specimen"
-    var plants : MutableLiveData<List<Plant>> = MutableLiveData<List<Plant>>()
+    var plants = plantService.getLocalPlantDAO().getAllPlants()
     var specimens : MutableLiveData<List<Specimen>> = MutableLiveData<List<Specimen>>()
     var selectedSpecimen by mutableStateOf(Specimen())
     var user : User? = null
@@ -39,38 +39,36 @@ class MainViewModel(var plantService : IPlantService = PlantService()) : ViewMod
     }
 
      fun listenToSpecimens() {
-       user?.let {
-           user ->
-           firestore.collection("users").document(user.uid).collection("specimens")
-               .addSnapshotListener { snapshot, e ->
-                   // handle the error if there is one, and then return
-                   if (e != null) {
-                       Log.w("Listen failed", e)
-                       return@addSnapshotListener
-                   }
-                   // if we reached this point, there was not an error
-                   snapshot?.let {
-                       val allSpecimens = ArrayList<Specimen>()
-                       allSpecimens.add(Specimen(plantName = NEW_SPECIMEN))
-                       val documents = snapshot.documents
-                       documents.forEach {
-                           val specimen = it.toObject(Specimen::class.java)
-                           specimen?.let {
-                               allSpecimens.add(it)
-                           }
-                       }
-                       specimens.value = allSpecimens
-                   }
-               }
-       }
-    }
+         user?.let {
+             user ->
+             firestore.collection("users").document(user.uid).collection("specimens")
+                 .addSnapshotListener { snapshot, e ->
+                     // handle the error if there is one, and then return
+                     if (e != null) {
+                         Log.w("Listen failed", e)
+                         return@addSnapshotListener
+                     }
+                     // if we reached this point, there was not an error
+                     snapshot?.let {
+                         val allSpecimens = ArrayList<Specimen>()
+                         allSpecimens.add(Specimen(plantName = NEW_SPECIMEN))
+                         val documents = snapshot.documents
+                         documents.forEach {
+                             val specimen = it.toObject(Specimen::class.java)
+                             specimen?.let {
+                                 allSpecimens.add(it)
+                             }
+                         }
+                         specimens.value = allSpecimens
+                     }
+                 }
+         }
+     }
 
     fun fetchPlants() {
         viewModelScope.launch {
-            var innerPlants = plantService.fetchPlants()
-            plants.postValue(innerPlants)
+            plantService.fetchPlants()
         }
-
     }
 
     fun saveSpecimen() {
